@@ -18,7 +18,7 @@ const Profile = () => {
   const [isEditingNickname, setIsEditingNickname] = useState(false);
   const [editNickname, setEditNickname] = useState('');
   const isGuest = !!localStorage.getItem('moveat_guest_id');
-  const { data: weeklyData } = useWeeklyData();
+  const { data: weeklyData, loading: weeklyLoading } = useWeeklyData();
 
   useEffect(() => {
     if (isGuest) {
@@ -128,7 +128,7 @@ const Profile = () => {
         <ProfileActionCard icon={History} colorClass="bg-orange-100" textClass="text-orange-600" title="历史外卖推荐" desc="本周已推荐 12 单" onClick={() => {}} />
       </div>
 
-      <HealthDashboard data={weeklyData} />
+      <HealthDashboard data={weeklyData} loading={weeklyLoading} />
       <div className="mt-4"><SettingsCard /></div>
 
       <ActivityLogDialog open={showDialog} onOpenChange={setShowDialog} onSuccess={() => toast.success('运动数据已更新')} />

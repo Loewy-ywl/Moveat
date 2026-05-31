@@ -24,8 +24,8 @@ const MOCK_DATA = [
 ];
 
 export const useWeeklyData = () => {
-  const [data, setData] = useState(MOCK_DATA);
-  const [loading, setLoading] = useState(false);
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -35,16 +35,21 @@ export const useWeeklyData = () => {
       const guestActivity = JSON.parse(localStorage.getItem('moveat_guest_activity') || 'null');
       const todayStr = new Date().toISOString().split('T')[0];
       const todayIntake = guestDiet.filter((d) => d.date === todayStr).reduce((s, d) => s + (d.calorie || 0), 0);
-      const todayBurn = guestActivity?.calories_burned || 2200;
-      const mock = [...MOCK_DATA];
-      mock[6] = { ...mock[6], intake: todayIntake || mock[6].intake, burn: todayBurn || mock[6].burn };
-      setData(mock);
+      const todayBurn = guestActivity?.calories_burned || 0;
+      // 游客也显示真实7天数据，没有就显示0
+      const dates = getPast7Days();
+      const result = dates.map((dateStr) => {
+        const intake = guestDiet.filter((d) => d.date === dateStr).reduce((s, d) => s + (d.calorie || 0), 0);
+        const burn = dateStr === todayStr ? todayBurn : 0;
+        return { day: dayNames[new Date(dateStr).getDay()], intake, burn, weight: 0 };
+      });
+      setData(result);
       setLoading(false);
       return;
     }
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { setData(MOCK_DATA); setLoading(false); return; }
+      if (!user) { setData([]); setLoading(false); return; }
       const dates = getPast7Days();
       const [dietRes, actRes, weightRes, profileRes] = await Promise.all([
         supabase.from('diet_intake').select('date, calorie').eq('user_id', user.id).gte('date', dates[0]).lte('date', dates[6]),
@@ -68,7 +73,7 @@ export const useWeeklyData = () => {
       setData(result);
     } catch (err) {
       console.error('加载周数据失败:', err);
-      setData(MOCK_DATA);
+      setData([]);
     } finally {
       setLoading(false);
     }

@@ -86,6 +86,24 @@ export const useWeeklySummary = () => {
 
   useEffect(() => { load(); }, [load]);
 
+  // 监听饮食/运动数据变化，自动刷新 AI 总结
+  useEffect(() => {
+    const handleDataChange = async () => {
+      const { id } = await getUserInfo();
+      // 清除缓存，下次 load 时会重新生成
+      localStorage.removeItem(`${CACHE_KEY}_${id}`);
+      localStorage.removeItem(`${CACHE_DATE_KEY}_${id}`);
+      // 立即重新生成
+      await load();
+    };
+    window.addEventListener('moveat-diet-update', handleDataChange);
+    window.addEventListener('moveat-activity-update', handleDataChange);
+    return () => {
+      window.removeEventListener('moveat-diet-update', handleDataChange);
+      window.removeEventListener('moveat-activity-update', handleDataChange);
+    };
+  }, [load]);
+
   const refresh = useCallback(async () => {
     const { id } = await getUserInfo();
     localStorage.removeItem(`${CACHE_KEY}_${id}`);
