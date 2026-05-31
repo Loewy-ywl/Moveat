@@ -84,63 +84,73 @@ const Recommendations = () => {
         )}
       </div>
 
-      {loading &&
-      <div className="flex items-center justify-center gap-2 py-3 mb-4 text-sm text-muted-foreground bg-muted/40 rounded-lg">
-          <Loader2 className="animate-spin" size={16} />
-          {foods.length > 0 ? '正在生成新推荐...' : '正在为你生成推荐...'}
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-16 gap-3">
+          <div className="w-12 h-12 rounded-full bg-emerald-50 flex items-center justify-center">
+            <Loader2 className="animate-spin text-emerald-500" size={24} />
+          </div>
+          <p className="text-sm text-gray-500">AI 正在根据你的实时数据生成专属推荐...</p>
         </div>
-      }
-
-      <div className="space-y-4">
-        {foods.map((food, i) => {
-          const nutri = parseNutrition(food.nutrition_ratio);
-          return (
-            <Card key={`${food.food_name}-${i}`} className="overflow-hidden">
-              <div className="h-32 bg-muted relative">
-                <FoodImage foodName={food.food_name} />
-                
-                <Badge className="absolute top-2 right-2 bg-emerald-500">
-                  <ThumbsUp size={12} className="mr-1" />{food.food_type}
-                </Badge>
-              </div>
-              <CardContent className="p-4">
-                <div className="flex justify-between items-start mb-1">
-                  <div>
-                    <h3 className="font-bold">{food.food_name}</h3>
-                    <p className="text-xs text-muted-foreground">{food.food_type}</p>
-                  </div>
-                  <div className="flex items-center text-orange-500 text-sm font-medium">
-                    <Flame size={14} className="mr-1" />{food.heat}
-                  </div>
-                </div>
-                <div className="flex gap-3 text-xs text-muted-foreground mb-3">
-                  <span>蛋白质 {nutri.p}</span>
-                  <span>碳水 {nutri.c}</span>
-                  <span>脂肪 {nutri.f}</span>
-                </div>
-                <div className="bg-muted rounded-lg p-3 text-xs text-muted-foreground mb-3">
-                  <span className="text-primary font-medium">推荐理由：</span>{food.reason}
-                </div>
-                <Button
-                  size="sm"
-                  className="w-full bg-[#FFC300] text-gray-900 hover:bg-[#e6b000]"
-                  onClick={() => window.open(`https://h5.waimai.meituan.com/waimai/mindex/searchresults?queryType=12002&keyword=${encodeURIComponent(food.food_name)}&entranceId=0&qwTypeId=0&mode=search`, '_blank')}>
+      ) : foods.length > 0 ? (
+        <div className="space-y-4">
+          {foods.map((food, i) => {
+            const nutri = parseNutrition(food.nutrition_ratio);
+            return (
+              <Card key={`${food.food_name}-${i}`} className="overflow-hidden">
+                <div className="h-32 bg-muted relative">
+                  <FoodImage foodName={food.food_name} />
                   
-                  <ExternalLink size={14} className="mr-1" /> 一键跳转美团外卖下单
-                </Button>
-              </CardContent>
-            </Card>);
+                  <Badge className="absolute top-2 right-2 bg-emerald-500">
+                    <ThumbsUp size={12} className="mr-1" />{food.food_type}
+                  </Badge>
+                </div>
+                <CardContent className="p-4">
+                  <div className="flex justify-between items-start mb-1">
+                    <div>
+                      <h3 className="font-bold">{food.food_name}</h3>
+                      <p className="text-xs text-muted-foreground">{food.food_type}</p>
+                    </div>
+                    <div className="flex items-center text-orange-500 text-sm font-medium">
+                      <Flame size={14} className="mr-1" />{food.heat}
+                    </div>
+                  </div>
+                  <div className="flex gap-3 text-xs text-muted-foreground mb-3">
+                    <span>蛋白质 {nutri.p}</span>
+                    <span>碳水 {nutri.c}</span>
+                    <span>脂肪 {nutri.f}</span>
+                  </div>
+                  <div className="bg-muted rounded-lg p-3 text-xs text-muted-foreground mb-3">
+                    <span className="text-primary font-medium">推荐理由：</span>{food.reason}
+                  </div>
+                  <Button
+                    size="sm"
+                    className="w-full bg-[#FFC300] text-gray-900 hover:bg-[#e6b000]"
+                    onClick={() => window.open(`https://h5.waimai.meituan.com/waimai/mindex/searchresults?queryType=12002&keyword=${encodeURIComponent(food.food_name)}&entranceId=0&qwTypeId=0&mode=search`, '_blank')}>
+                    
+                    <ExternalLink size={14} className="mr-1" /> 一键跳转美团外卖下单
+                  </Button>
+                </CardContent>
+              </Card>);
 
-        })}
-      </div>
+          })}
+        </div>
+      ) : (
+        <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
+          <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+            <ImageOff size={24} className="opacity-50" />
+          </div>
+          <p className="text-sm">暂无推荐数据</p>
+          <p className="text-xs">切换到首页生成今日专属推荐</p>
+        </div>
+      )}
 
-      {foods.length > 0 &&
+      {foods.length > 0 && !loading &&
       <button
         onClick={handleLoadMore}
         disabled={loading}
         className="fixed bottom-20 right-4 w-12 h-12 rounded-full bg-[#FFC300] text-gray-900 shadow-lg flex items-center justify-center hover:bg-[#e6b000] active:scale-95 transition-all disabled:opacity-60 z-50">
         
-          {loading ? <Loader2 className="animate-spin" size={20} /> : <RefreshCw size={20} />}
+          <RefreshCw size={20} />
         </button>
       }
     </div>);

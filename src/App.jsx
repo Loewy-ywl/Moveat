@@ -19,8 +19,8 @@ const queryClient = new QueryClient();
 
 const App = () => {
   const [user, setUser] = useState(null);
-  const [isGuest, setIsGuest] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [isGuest, setIsGuest] = useState(!!localStorage.getItem('moveat_guest_id'));
+  const [authChecked, setAuthChecked] = useState(false);
 
   const clearGuestState = useCallback(() => {
     localStorage.removeItem('moveat_guest_id');
@@ -33,8 +33,6 @@ const App = () => {
 
   useEffect(() => {
     let mounted = true;
-    const guestId = localStorage.getItem('moveat_guest_id');
-    if (guestId && mounted) setIsGuest(true);
 
     const initSession = async () => {
       try {
@@ -54,7 +52,7 @@ const App = () => {
         console.error('初始化认证出错:', err);
         if (mounted) setUser(null);
       } finally {
-        if (mounted) setLoading(false);
+        if (mounted) setAuthChecked(true);
       }
     };
 
@@ -82,14 +80,6 @@ const App = () => {
     };
   }, [clearGuestState]);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-pulse text-muted-foreground text-sm">正在加载...</div>
-      </div>
-    );
-  }
-
   const isLoggedIn = user || isGuest;
 
   return (
@@ -98,9 +88,9 @@ const App = () => {
         <Toaster position="top-center" offset={60} />
         <HashRouter>
           <Routes>
-            <Route path="/" element={!isLoggedIn ? <Index /> : <Navigate to="/home" />} />
-            <Route path="/login" element={!isLoggedIn ? <Login /> : <Navigate to="/home" />} />
-            <Route path="/register" element={!isLoggedIn ? <Register /> : <Navigate to="/home" />} />
+            <Route path="/" element={!authChecked || !isLoggedIn ? <Index /> : <Navigate to="/home" />} />
+            <Route path="/login" element={!authChecked || !isLoggedIn ? <Login /> : <Navigate to="/home" />} />
+            <Route path="/register" element={!authChecked || !isLoggedIn ? <Register /> : <Navigate to="/home" />} />
             <Route path="/onboarding" element={isLoggedIn ? <Onboarding /> : <Navigate to="/login" />} />
             <Route path="/home" element={isLoggedIn ? <Home /> : <Navigate to="/login" />} />
             <Route path="/recommend" element={isLoggedIn ? <Recommendations /> : <Navigate to="/login" />} />

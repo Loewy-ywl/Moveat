@@ -75,7 +75,7 @@ export async function* streamChat(messages, userContext = null) {
  * @param {Object} structuredJson - 用户档案与当日运动数据
  * @param {string|null} mode - 筛选模式
  */
-export async function analyzeUserData(structuredJson, mode = null) {
+export async function analyzeUserData(structuredJson, mode = null, signal = null) {
   const modeInstructions = {
     '低卡模式': '当前为低卡模式：recommend_list 中的每一个菜品热量必须≤300kcal，禁止推荐热量超过300kcal的菜品。每条推荐理由必须明确说明「这份餐食热量XXkcal，符合低卡模式需求，避免热量超标」，其中XXkcal必须是该菜品的真实热量值。',
     '高蛋白模式': '当前为高蛋白模式：recommend_list 中的每一个菜品蛋白质必须≥30g，禁止推荐蛋白质低于30g的菜品。每条推荐理由必须明确说明「这份餐食蛋白质XXg，符合高蛋白模式需求，可补充你的蛋白质缺口」，其中XXg必须是该菜品的真实蛋白质含量。',
@@ -95,6 +95,7 @@ export async function analyzeUserData(structuredJson, mode = null) {
 ${JSON.stringify(structuredJson, null, 2)}${modePrompt}
 
 注意：用户数据中的 today_diet 是今日已摄入汇总，today_diet_logs 是各餐次明细记录，nutrition_goals 是目标值，nutrition_gaps 是计算好的缺口（目标-已摄入，可能为负数表示已超标）。
+推荐时应避免与 today_diet_logs 中最近几餐的食物高度重复，尽量提供多样化的选择。
 
 ⚠️ 输出约束：
 - 必须仅返回标准JSON格式内容
@@ -112,10 +113,14 @@ ${JSON.stringify(structuredJson, null, 2)}${modePrompt}
   * 下午（12-18点）：结合午餐/下午茶场景，建议关注蛋白质和膳食纤维
   * 晚上（18-24点）：结合晚餐场景，给出热量缺口与营养补充建议
 - ai_tip 必须结合 today_diet_logs 中的已摄入餐食明细，不要固定使用"晚餐"表述，也不要遗漏用户已经吃过的餐次
-- recommend_list 的 food_name 必须结合用户的 diet_preference（饮食偏好）和 forbidden_food（忌口）来生成，优先推荐用户偏好的菜系/类型，严格避开忌口食材
-- 如用户偏好包含"日式""韩式""西式""中餐"等，必须优先推荐对应菜系的餐品，不要默认只推荐健身餐或轻食
-- food_name 应改为通用、高匹配度的餐食关键词（如"日式照烧鸡腿饭""韩式石锅拌饭""西式牛排沙拉"），不要生成具体商家店名，确保可直接用于美团外卖搜索
-- recommend_list 的 reason 必须严格基于 nutrition_gaps 和 today_diet 中的真实数据生成，同时体现该菜品如何符合用户的饮食偏好，禁止杜撰任何数值
+- recommend_list 的 food_name 必须综合以下因素生成，按优先级排序：
+  1. 营养目标（goal：减脂/增肌/保持）和 nutrition_gaps：确保推荐菜品有助于弥补当日营养缺口
+  2. 饮食偏好 diet_preference：在符合营养需求的前提下，优先选择用户偏好的菜系和类型
+  3. 忌口 forbidden_food：严格排除包含忌口食材的菜品
+  4. 当前时间 current_hour：结合早/午/晚餐场景推荐合适的餐品
+- 不要只推荐健身餐或轻食，应在营养合理的前提下体现用户的饮食偏好多样性
+- food_name 使用通用、高匹配度的餐食关键词，不要生成具体商家店名，确保可直接用于美团外卖搜索
+- recommend_list 的 reason 必须综合以下维度生成：基于 nutrition_gaps 和 today_diet 的真实数据说明如何弥补缺口；说明如何符合用户的饮食偏好；结合用户目标（减脂/增肌/保持）给出针对性建议。禁止杜撰任何数值
 - 当存在筛选模式时（非AI排序），recommend_list 中的所有菜品必须100%符合该模式的营养门槛，不允许出现任何不符合条件的菜品
 - 高蛋白模式下：recommend_list 中所有菜品的蛋白质必须≥30g，禁止出现低蛋白菜品。每条推荐理由必须包含「这份餐食蛋白质XXg，符合高蛋白模式需求，可补充你的蛋白质缺口」，其中XXg为该菜品实际含有的蛋白质克数
 - 低卡模式下：recommend_list 中所有菜品的热量必须≤300kcal，禁止出现高热量菜品。每条推荐理由必须包含「这份餐食热量XXkcal，符合低卡模式需求，避免热量超标」，其中XXkcal为该菜品实际含有的热量值
@@ -155,6 +160,7 @@ ${JSON.stringify(structuredJson, null, 2)}${modePrompt}
       temperature: 0.7,
       max_tokens: 1024,
     }),
+    signal,
   });
 
   if (!response.ok) {

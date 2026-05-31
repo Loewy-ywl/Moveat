@@ -8,6 +8,7 @@ import HealthDashboard from '@/components/HealthDashboard';
 import SettingsCard from '@/components/SettingsCard';
 import ActivityLogDialog from '@/components/ActivityLogDialog';
 import { useWeeklyData } from '@/hooks/useWeeklyData';
+import { useHomeData, clearHomeDataCache } from '@/hooks/useHomeData';
 
 const MOCK_ACTIVITY = { steps: 12000, calories_burned: 680, cardio_minutes: 45, strength_minutes: 30 };
 
@@ -21,8 +22,10 @@ const prefOptions = ['中餐', '轻食', '健身餐', '低碳', '高蛋白', '�
 const freqOptions = ['1-2次', '3-4次', '5次以上'];
 
 const Profile = () => {
-  const [nickname, setNickname] = useState('Moveat 用户');
-  const [profile, setProfile] = useState(null);
+  const { profile: homeProfile, nickname: homeNickname } = useHomeData();
+  const [nickname, setNickname] = useState(homeNickname || 'Moveat 用户');
+  const [profile, setProfile] = useState(homeProfile);
+  const [profileLoading, setProfileLoading] = useState(!homeProfile);
   const [showDialog, setShowDialog] = useState(false);
   const [isEditingNickname, setIsEditingNickname] = useState(false);
   const [editNickname, setEditNickname] = useState('');
@@ -33,14 +36,25 @@ const Profile = () => {
   const { data: weeklyData, loading: weeklyLoading } = useWeeklyData();
 
   useEffect(() => {
+    if (homeProfile) {
+      setProfile(homeProfile);
+      setNickname(homeNickname);
+      setProfileLoading(false);
+      return;
+    }
     if (isGuest) {
       setNickname(localStorage.getItem('moveat_guest_name') || '游客用户');
       setProfile(JSON.parse(localStorage.getItem('moveat_guest_profile') || 'null'));
+      setProfileLoading(false);
       return;
     }
+    // 如果 useHomeData 没有数据，自己加载
     supabase.auth.getUser()
       .then(({ data: { user } }) => {
-        if (!user) return;
+        if (!user) {
+          setProfileLoading(false);
+          return;
+        }
         return supabase.from('users').select('*').eq('user_id', user.id).maybeSingle();
       })
       .then((result) => {
@@ -48,11 +62,13 @@ const Profile = () => {
           setProfile(result.data);
           if (result.data.name) setNickname(result.data.name);
         }
+        setProfileLoading(false);
       })
       .catch((err) => {
         console.error('加载用户档案失败:', err);
+        setProfileLoading(false);
       });
-  }, [isGuest]);
+  }, [isGuest, homeProfile, homeNickname]);
 
   const handleSaveNickname = async () => {
     const name = editNickname.trim() || 'Moveat 用户';
@@ -106,12 +122,15 @@ const Profile = () => {
         setProfile(payload);
         toast.success('档案已更新');
       } else {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          await supabase.from('users').update(payload).eq('user_id', user.id);
-          setProfile((prev) => ({ ...prev, ...payload }));
-          toast.success('档案已更新');
-        }
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from('users').update(payload).eq('user_id', user.id);
+        const updatedProfile = { ...profile, ...payload };
+        setProfile(updatedProfile);
+        // 清除 useHomeData 缓存，让其他页面获取最新数据
+        clearHomeDataCache();
+        toast.success('档案已更新');
+      }
       }
       setIsEditingProfile(false);
     } catch (err) {
@@ -188,7 +207,7 @@ const Profile = () => {
         {isGuest && <span className="mt-2 px-3 py-0.5 bg-amber-100 text-amber-700 text-xs rounded-full">游客模式</span>}
       </div>
 
-      <ProfileCard profile={profile} onEdit={openProfileEdit} />
+      <ProfileCard profile={profile} onEdit={openProfileEdit} loading={profileLoading} />
 
       <div className="space-y-3 my-4">
         <ProfileActionCard icon={Activity} colorClass="bg-blue-100" textClass="text-blue-600" title="运动数据同步" desc={isGuest ? '游客模式暂不可用' : 'Apple Health 已连接'} onClick={handleSyncMockData} />

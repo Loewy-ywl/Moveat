@@ -62,20 +62,37 @@ const buildDietLogsPayload = (logs) =>
     fat: log.fat,
   }));
 
+// 全局缓存，避免每次组件挂载都重新请求
+let globalCache = null;
+let globalCacheTime = 0;
+const CACHE_TTL = 30 * 1000; // 30秒缓存
+
+// 暴露清除缓存的方法，供外部调用
+export const clearHomeDataCache = () => {
+  globalCache = null;
+  globalCacheTime = 0;
+};
+
 export const useHomeData = () => {
-  const [nickname, setNickname] = useState('Moveat 用户');
-  const [steps, setSteps] = useState(0);
-  const [calories, setCalories] = useState(0);
-  const [cardioMinutes, setCardioMinutes] = useState(0);
-  const [strengthMinutes, setStrengthMinutes] = useState(0);
-  const [profile, setProfile] = useState(null);
-  const [activityLog, setActivityLog] = useState(null);
+  const [nickname, setNickname] = useState(globalCache?.nickname || 'Moveat 用户');
+  const [steps, setSteps] = useState(globalCache?.steps || 0);
+  const [calories, setCalories] = useState(globalCache?.calories || 0);
+  const [cardioMinutes, setCardioMinutes] = useState(globalCache?.cardioMinutes || 0);
+  const [strengthMinutes, setStrengthMinutes] = useState(globalCache?.strengthMinutes || 0);
+  const [profile, setProfile] = useState(globalCache?.profile || null);
+  const [activityLog, setActivityLog] = useState(globalCache?.activityLog || null);
+  const [initialized, setInitialized] = useState(!!globalCache);
   const { dietLogs, todaySummary, refresh: refreshDiet } = useDietLogs();
 
   const nutritionGoals = useMemo(() => calculateNutritionGoals(profile), [profile]);
   const dietSummary = useMemo(() => todaySummary(), [todaySummary, dietLogs]);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (force = false) => {
+    // 如果缓存有效且不是强制刷新，直接返回缓存
+    if (!force && globalCache && Date.now() - globalCacheTime < CACHE_TTL) {
+      return globalCache;
+    }
+
     const today = getLocalDateStr();
     const gaps = {
       calorie: nutritionGoals.calorieGoal - dietSummary.calorie,
@@ -103,7 +120,7 @@ export const useHomeData = () => {
       }
       setNickname(localStorage.getItem('moveat_guest_name') || '游客用户');
       setProfile(guestProfile);
-      return {
+      const result = {
         profile: guestProfile,
         activityLog: guestActivity,
         structuredJson: {
@@ -116,6 +133,9 @@ export const useHomeData = () => {
           current_hour: currentHour,
         },
       };
+      globalCache = result;
+      globalCacheTime = Date.now();
+      return result;
     }
 
     try {
@@ -178,7 +198,10 @@ export const useHomeData = () => {
         current_hour: currentHour,
       };
 
-      return { profile: userData, activityLog: act, structuredJson: structuredJsonResult };
+      const result = { profile: userData, activityLog: act, structuredJson: structuredJsonResult };
+      globalCache = result;
+      globalCacheTime = Date.now();
+      return result;
     } catch (err) {
       console.error('加载首页数据出错:', err);
       return null;
@@ -186,7 +209,15 @@ export const useHomeData = () => {
   }, [dietSummary, nutritionGoals, dietLogs]);
 
   useEffect(() => {
-    loadData();
+    // 如果有缓存，先标记为已初始化，然后后台刷新
+    if (globalCache && Date.now() - globalCacheTime < CACHE_TTL) {
+      setInitialized(true);
+      // 后台静默刷新，不阻塞 UI
+      loadData(false);
+    } else {
+      // 无缓存，需要加载
+      loadData(false).then(() => setInitialized(true));
+    }
   }, [loadData]);
 
   useEffect(() => {
@@ -214,6 +245,9 @@ export const useHomeData = () => {
   };
 
   const refresh = useCallback(async () => {
+    // 强制刷新，清除缓存
+    globalCache = null;
+    globalCacheTime = 0;
     const freshDietLogs = await refreshDiet();
     const freshDietSummary = freshDietLogs.reduce(
       (acc, log) => ({
@@ -224,7 +258,7 @@ export const useHomeData = () => {
       }),
       { calorie: 0, protein: 0, carb: 0, fat: 0 }
     );
-    const result = await loadData();
+    const result = await loadData(true); // force = true
     const goals = result?.structuredJson?.nutrition_goals || nutritionGoals;
     const hour = new Date().getHours();
     const gaps = {

@@ -71,24 +71,33 @@ const hashPayload = (payload) => {
 export const useWeeklySummary = () => {
   const [summary, setSummary] = useState('');
   const [loading, setLoading] = useState(false);
+  const [initialized, setInitialized] = useState(false);
 
   const load = useCallback(async (forceRefresh = false) => {
+    // 检查本地缓存，如果有缓存先显示，不阻塞 UI
+    const { id } = await getUserInfo();
+    const ck = `${CACHE_KEY}_${id}`;
+    const chk = `${CACHE_HASH_KEY}_${id}`;
+    const cached = localStorage.getItem(ck);
+
+    // 如果不是强制刷新，先尝试用缓存，不设置 loading
+    if (!forceRefresh && cached) {
+      setSummary(cached);
+      setInitialized(true);
+    }
+
+    // 只有在需要重新生成时才设置 loading
+    const payload = id.startsWith('guest_') ? buildGuestPayload() : await buildUserPayload(id);
+    const currentHash = hashPayload(payload);
+
+    // 如果数据没变且不是强制刷新，直接返回（缓存已显示）
+    if (!forceRefresh && localStorage.getItem(chk) === currentHash && cached) {
+      return;
+    }
+
+    // 需要重新生成，显示 loading
     setLoading(true);
     try {
-      const { id, isGuest } = await getUserInfo();
-      const ck = `${CACHE_KEY}_${id}`;
-      const chk = `${CACHE_HASH_KEY}_${id}`;
-
-      const payload = isGuest ? buildGuestPayload() : await buildUserPayload(id);
-      const currentHash = hashPayload(payload);
-
-      // 如果数据没变且不是强制刷新，用缓存
-      if (!forceRefresh && localStorage.getItem(chk) === currentHash && localStorage.getItem(ck)) {
-        setSummary(localStorage.getItem(ck));
-        setLoading(false);
-        return;
-      }
-
       const result = await generateWeeklySummary(payload);
       setSummary(result);
       localStorage.setItem(ck, result);
@@ -98,10 +107,13 @@ export const useWeeklySummary = () => {
       setSummary('本周数据已记录，继续保持健康的生活习惯，合理搭配饮食与运动。');
     } finally {
       setLoading(false);
+      setInitialized(true);
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load(false);
+  }, [load]);
 
   // 监听饮食/运动数据变化，自动刷新 AI 总结
   useEffect(() => {

@@ -8,36 +8,53 @@ const GUEST_DIET_KEY = 'moveat_guest_diet_logs';
 
 const getTodayStr = () => getLocalDateStr();
 
+// 按日期缓存饮食记录
+const dietLogsCache = new Map();
+const DIET_CACHE_TTL = 30 * 1000; // 30秒
+
 export const useDietLogs = (date) => {
-  const [dietLogs, setDietLogs] = useState([]);
-  const [loading, setLoading] = useState(true); // 初始为 true，显示加载状态
-  const isGuest = !!localStorage.getItem('moveat_guest_id');
   const targetDate = date || getTodayStr();
+  const cachedEntry = dietLogsCache.get(targetDate);
+  const hasValidCache = cachedEntry && Date.now() - cachedEntry.time < DIET_CACHE_TTL;
+
+  const [dietLogs, setDietLogs] = useState(hasValidCache ? cachedEntry.data : []);
+  const [loading, setLoading] = useState(!hasValidCache);
+  const isGuest = !!localStorage.getItem('moveat_guest_id');
 
   const loadDietLogs = useCallback(async () => {
+    // 如果有有效缓存，直接使用
+    const entry = dietLogsCache.get(targetDate);
+    if (entry && Date.now() - entry.time < DIET_CACHE_TTL) {
+      setDietLogs(entry.data);
+      setLoading(false);
+      return entry.data;
+    }
+
     setLoading(true);
     try {
+      let result;
       if (isGuest) {
         const raw = localStorage.getItem(GUEST_DIET_KEY);
         const all = raw ? JSON.parse(raw) : [];
-        const filtered = all.filter((log) => log.date === targetDate).reverse();
-        setDietLogs(filtered);
-        return filtered;
+        result = all.filter((log) => log.date === targetDate).reverse();
+      } else {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          result = [];
+        } else {
+          const { data, error } = await supabase
+            .from('diet_intake')
+            .select('*')
+            .eq('user_id', user.id)
+            .eq('date', targetDate)
+            .order('id', { ascending: false });
+          if (error) throw error;
+          result = data || [];
+        }
       }
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        setDietLogs([]);
-        return [];
-      }
-      const { data, error } = await supabase
-        .from('diet_intake')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('date', targetDate)
-        .order('id', { ascending: false });
-      if (error) throw error;
-      setDietLogs(data || []);
-      return data || [];
+      setDietLogs(result);
+      dietLogsCache.set(targetDate, { data: result, time: Date.now() });
+      return result;
     } catch (err) {
       console.error('加载饮食记录失败:', err);
       toast.error('加载饮食记录失败');
