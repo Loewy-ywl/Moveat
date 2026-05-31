@@ -180,7 +180,7 @@ const DietLogDialog = ({ open, onOpenChange, editingItem, onSubmit }) => {
                   <img
                     src={imagePreview}
                     alt="食物预览"
-                    className="w-full h-40 object-cover rounded-lg"
+                    className="w-full h-48 object-contain rounded-lg bg-gray-50"
                   />
                   <button
                     onClick={handleRemoveImage}

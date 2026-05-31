@@ -10,7 +10,7 @@ const getTodayStr = () => getLocalDateStr();
 
 export const useDietLogs = (date) => {
   const [dietLogs, setDietLogs] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // 初始为 true，显示加载状态
   const isGuest = !!localStorage.getItem('moveat_guest_id');
   const targetDate = date || getTodayStr();
 
