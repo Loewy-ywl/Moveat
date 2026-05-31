@@ -4,7 +4,7 @@ import { generateWeeklySummary } from '@/lib/glm';
 import { toast } from 'sonner';
 
 const CACHE_KEY = 'moveat_weekly_summary';
-const CACHE_DATE_KEY = 'moveat_weekly_summary_date';
+const CACHE_HASH_KEY = 'moveat_weekly_summary_hash';
 
 const getUserInfo = async () => {
   const guestId = localStorage.getItem('moveat_guest_id');
@@ -56,26 +56,43 @@ const buildUserPayload = async (userId) => {
   };
 };
 
+// 简单哈希函数，用于判断数据是否变化
+const hashPayload = (payload) => {
+  const str = JSON.stringify(payload);
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  return String(hash);
+};
+
 export const useWeeklySummary = () => {
   const [summary, setSummary] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (forceRefresh = false) => {
     setLoading(true);
     try {
       const { id, isGuest } = await getUserInfo();
-      const today = new Date().toISOString().split('T')[0];
       const ck = `${CACHE_KEY}_${id}`;
-      const cd = `${CACHE_DATE_KEY}_${id}`;
-      if (localStorage.getItem(cd) === today && localStorage.getItem(ck)) {
+      const chk = `${CACHE_HASH_KEY}_${id}`;
+
+      const payload = isGuest ? buildGuestPayload() : await buildUserPayload(id);
+      const currentHash = hashPayload(payload);
+
+      // 如果数据没变且不是强制刷新，用缓存
+      if (!forceRefresh && localStorage.getItem(chk) === currentHash && localStorage.getItem(ck)) {
         setSummary(localStorage.getItem(ck));
+        setLoading(false);
         return;
       }
-      const payload = isGuest ? buildGuestPayload() : await buildUserPayload(id);
+
       const result = await generateWeeklySummary(payload);
       setSummary(result);
       localStorage.setItem(ck, result);
-      localStorage.setItem(cd, today);
+      localStorage.setItem(chk, currentHash);
     } catch (err) {
       console.error('周总结生成失败:', err);
       setSummary('本周数据已记录，继续保持健康的生活习惯，合理搭配饮食与运动。');
@@ -89,12 +106,8 @@ export const useWeeklySummary = () => {
   // 监听饮食/运动数据变化，自动刷新 AI 总结
   useEffect(() => {
     const handleDataChange = async () => {
-      const { id } = await getUserInfo();
-      // 清除缓存，下次 load 时会重新生成
-      localStorage.removeItem(`${CACHE_KEY}_${id}`);
-      localStorage.removeItem(`${CACHE_DATE_KEY}_${id}`);
-      // 立即重新生成
-      await load();
+      // 强制重新生成，因为数据已变化
+      await load(true);
     };
     window.addEventListener('moveat-diet-update', handleDataChange);
     window.addEventListener('moveat-activity-update', handleDataChange);
@@ -105,10 +118,7 @@ export const useWeeklySummary = () => {
   }, [load]);
 
   const refresh = useCallback(async () => {
-    const { id } = await getUserInfo();
-    localStorage.removeItem(`${CACHE_KEY}_${id}`);
-    localStorage.removeItem(`${CACHE_DATE_KEY}_${id}`);
-    await load();
+    await load(true);
     toast.success('周总结已更新');
   }, [load]);
 

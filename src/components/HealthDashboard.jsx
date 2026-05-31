@@ -128,9 +128,9 @@ const HealthDashboard = ({ data, loading: dataLoading }) => {
                 <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#9ca3af' }} dy={8} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#9ca3af' }} />
                 <Tooltip content={<CustomTooltip />} />
-                <Area type="monotone" dataKey="intake" stroke="#f97316" strokeWidth={2.5} fill="url(#intakeGradient)" name="摄入"
+                <Area type="monotone" dataKey="intake" stroke="#f97316" strokeWidth={2.5} fill="url(#intakeGradient)" name="摄入" isAnimationActive={false}
                   dot={{ r: 3, fill: '#f97316', strokeWidth: 0 }} activeDot={{ r: 5, fill: '#f97316', stroke: '#fff', strokeWidth: 2 }} />
-                <Area type="monotone" dataKey="burn" stroke="#10b981" strokeWidth={2.5} fill="url(#burnGradient)" name="消耗"
+                <Area type="monotone" dataKey="burn" stroke="#10b981" strokeWidth={2.5} fill="url(#burnGradient)" name="消耗" isAnimationActive={false}
                   dot={{ r: 3, fill: '#10b981', strokeWidth: 0 }} activeDot={{ r: 5, fill: '#10b981', stroke: '#fff', strokeWidth: 2 }} />
               </AreaChart>
             </ResponsiveContainer>
@@ -158,7 +158,7 @@ const HealthDashboard = ({ data, loading: dataLoading }) => {
                 <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#9ca3af' }} dy={8} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#9ca3af' }} domain={['dataMin - 0.5', 'dataMax + 0.5']} />
                 <Tooltip content={<CustomTooltip />} />
-                <Line type="monotone" dataKey="weight" stroke="#3b82f6" strokeWidth={2.5} name="体重"
+                <Line type="monotone" dataKey="weight" stroke="#3b82f6" strokeWidth={2.5} name="体重" isAnimationActive={false}
                   dot={{ r: 4, fill: '#3b82f6', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6, fill: '#3b82f6', stroke: '#fff', strokeWidth: 2 }} />
               </LineChart>
             </ResponsiveContainer>
