@@ -1,9 +1,7 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Target, Ruler, Weight, Pencil } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 
-const ProfileCard = ({ profile }) => {
-  const navigate = useNavigate();
+const ProfileCard = ({ profile, onEdit }) => {
   const goalLabel = { fat_loss: '减脂', muscle_gain: '增肌', maintain: '保持体型' };
   const tags = profile?.diet_preference ? profile.diet_preference.split(',').filter(Boolean) : ['中餐', '轻食', '高蛋白'];
 
@@ -13,7 +11,7 @@ const ProfileCard = ({ profile }) => {
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-bold">个人档案</h3>
           <button
-            onClick={() => navigate('/onboarding?mode=edit')}
+            onClick={onEdit}
             className="p-1.5 rounded-full hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
             aria-label="编辑个人档案"
           >
