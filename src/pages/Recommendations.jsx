@@ -22,9 +22,18 @@ const FoodImage = ({ foodName }) => {
     );
   }
 
+  // 使用 Unsplash Source 作为图片源
+  const getImageUrl = (keyword) => {
+    const cleanKeyword = keyword
+      .replace(/健身餐|轻食|简餐|套餐/g, '')
+      .replace(/高蛋白|低卡|清淡|低脂/g, '')
+      .trim();
+    return `https://source.unsplash.com/400x200/?food,${encodeURIComponent(cleanKeyword || 'healthy food')}`;
+  };
+
   return (
     <img
-      src={`https://nocode.meituan.com/photo/search?keyword=${encodeURIComponent(foodName)}&width=400&height=200`}
+      src={getImageUrl(foodName)}
       alt={foodName}
       className="w-full h-full object-cover"
       onError={() => setError(true)}

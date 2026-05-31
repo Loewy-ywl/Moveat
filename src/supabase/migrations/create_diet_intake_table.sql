@@ -8,7 +8,8 @@ CREATE TABLE IF NOT EXISTS diet_intake (
   calorie INT DEFAULT 0,
   protein INT DEFAULT 0,
   carb INT DEFAULT 0,
-  fat INT DEFAULT 0
+  fat INT DEFAULT 0,
+  image_url TEXT DEFAULT ''
 );
 
 -- 关闭行级安全策略，确保应用层能正常读写
