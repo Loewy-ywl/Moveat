@@ -4,7 +4,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Flame, ThumbsUp, ExternalLink, Loader2, RefreshCw, ImageOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useAiAnalysis } from '@/hooks/useAiAnalysis';
+import { useRecommendAiAnalysis } from '@/hooks/useAiAnalysis';
 
 const filters = ['AI排序', '低卡模式', '高蛋白模式'];
 
@@ -48,19 +48,33 @@ const parseNutrition = (ratio) => {
   return { p: parts[0] || '-', c: parts[1] || '-', f: parts[2] || '-' };
 };
 
+const filterToMode = {
+  'AI排序': 'default',
+  '低卡模式': '低卡模式',
+  '高蛋白模式': '高蛋白模式',
+};
+
 const Recommendations = () => {
   const [activeFilter, setActiveFilter] = useState('AI排序');
-  const { aiData, loading, refreshAnalysis } = useAiAnalysis();
+  const { aiData, loading, refreshAnalysis, switchMode, activeMode } = useRecommendAiAnalysis();
 
   const handleFilterClick = async (f) => {
     if (loading || f === activeFilter) return;
     setActiveFilter(f);
-    await refreshAnalysis(f);
+    
+    // 切换模式
+    const mode = filterToMode[f];
+    switchMode(mode);
+    
+    // 如果该模式没有数据，才请求
+    if (!aiData?.recommend_list || aiData.recommend_list.length === 0) {
+      await refreshAnalysis(mode);
+    }
   };
 
   const handleLoadMore = async () => {
     if (loading) return;
-    await refreshAnalysis(activeFilter);
+    await refreshAnalysis(filterToMode[activeFilter]);
   };
 
   const foods = aiData?.recommend_list || [];
