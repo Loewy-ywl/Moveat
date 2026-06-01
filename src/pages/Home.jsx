@@ -4,7 +4,7 @@ import { Dumbbell, RefreshCw, Loader2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useHomeData } from '@/hooks/useHomeData';
-import { useAiAnalysis } from '@/hooks/useAiAnalysis';
+import { useHomeAiAnalysis } from '@/hooks/useAiAnalysis';
 import HomeStats from '@/components/home/HomeStats';
 import FoodRecommendCard from '@/components/home/FoodRecommendCard';
 import { getGoalInfo, getGreeting, getFallbackAdvice } from '@/lib/home-helpers';
@@ -21,10 +21,13 @@ const Home = () => {
     nutritionGoals,
     refresh,
   } = useHomeData();
-  const { aiData, refreshAnalysis, loading: aiLoading } = useAiAnalysis();
+  const { aiData, refreshAnalysis, loading: aiLoading } = useHomeAiAnalysis();
   const navigate = useNavigate();
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [showFoodCard, setShowFoodCard] = useState(false);
+  const [showFoodCard, setShowFoodCard] = useState(() => {
+    // 从 localStorage 读取是否已生成过推荐
+    return localStorage.getItem('moveat_show_food_card') === 'true';
+  });
   const [foodRefreshing, setFoodRefreshing] = useState(false);
   const refreshRef = useRef(refreshAnalysis);
   refreshRef.current = refreshAnalysis;
@@ -43,9 +46,13 @@ const Home = () => {
   const carbPercent = carbGoal > 0 ? Math.min(100, Math.round((dietSummary.carb / carbGoal) * 100)) : 0;
   const fatPercent = fatGoal > 0 ? Math.min(100, Math.round((dietSummary.fat / fatGoal) * 100)) : 0;
 
+
   useEffect(() => {
     const checkAutoRefresh = async () => {
       if (document.visibilityState !== 'visible') return;
+      // 如果已经有推荐数据，不再自动刷新
+      if (aiData?.recommend_list?.length > 0) return;
+      
       const lastTime = parseInt(localStorage.getItem('moveat_ai_auto_refresh_time') || '0');
       if (Date.now() - lastTime > 10 * 60 * 1000) {
         if (!aiLoading) {
@@ -61,7 +68,7 @@ const Home = () => {
     checkAutoRefresh();
     document.addEventListener('visibilitychange', checkAutoRefresh);
     return () => document.removeEventListener('visibilitychange', checkAutoRefresh);
-  }, [aiLoading]);
+  }, [aiLoading, aiData]);
 
   const handleRefresh = async () => {
     if (isRefreshing) return;
@@ -71,6 +78,7 @@ const Home = () => {
       await refresh();
       await refreshAnalysis();
       setShowFoodCard(false);
+      localStorage.removeItem('moveat_show_food_card');
       toast.success('数据已更新');
     } catch {
       toast.error('刷新失败，请稍后再试');
@@ -82,6 +90,13 @@ const Home = () => {
   const handleGenerateFood = async () => {
     if (aiLoading || isRefreshing) return;
     setShowFoodCard(true);
+    localStorage.setItem('moveat_show_food_card', 'true');
+    
+    // 如果已经有推荐数据，直接使用缓存，不再请求
+    if (aiData?.recommend_list?.length > 0) {
+      return;
+    }
+    
     setFoodRefreshing(true);
     try {
       await refreshAnalysis();

@@ -4,9 +4,6 @@ import { analyzeUserData } from '@/lib/glm';
 import { supabase } from '@/integrations/supabase/client';
 import { getLocalDateStr } from '@/lib/date';
 
-const CACHE_KEY = 'moveat_ai_analysis';
-const CACHE_DATE_KEY = 'moveat_ai_analysis_date';
-
 const DEFAULT_RESULT = {
   daily_summary: '',
   heat_analysis: '',
@@ -15,127 +12,132 @@ const DEFAULT_RESULT = {
   recommend_list: [],
 };
 
-// 全局状态，跨组件共享刷新状态
-let globalRefreshing = false;
+// ============ 通用工具函数 ============
 
-export const useAiAnalysis = () => {
-  const { structuredJson, refresh: refreshHomeData } = useHomeData();
-  const [aiData, setAiData] = useState(() => {
-    // 初始化时立刻读取缓存
-    const today = getLocalDateStr();
-    const cachedDate = localStorage.getItem(CACHE_DATE_KEY);
-    const cached = localStorage.getItem(CACHE_KEY);
-    if (cached && cachedDate === today) {
-      try {
-        return JSON.parse(cached);
-      } catch {
-        return DEFAULT_RESULT;
-      }
+const getToday = () => getLocalDateStr();
+
+const readCache = (key) => {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && parsed.__date === getToday()) {
+      return parsed.data;
     }
-    return DEFAULT_RESULT;
-  });
-  const [loading, setLoading] = useState(globalRefreshing);
+    localStorage.removeItem(key);
+    return null;
+  } catch {
+    localStorage.removeItem(key);
+    return null;
+  }
+};
+
+const writeCache = (key, data) => {
+  try {
+    localStorage.setItem(key, JSON.stringify({ __date: getToday(), data }));
+  } catch (e) {
+    console.warn('localStorage 写入失败:', e);
+  }
+};
+
+const buildDefaultContext = (today) => ({
+  user_profile: {
+    height: 175,
+    weight: 70,
+    age: 25,
+    gender: '男',
+    goal: 'maintain',
+    diet_preference: '中餐',
+    forbidden_food: '',
+    sport_frequency: '3-4次',
+  },
+  today_activity: {
+    date: today,
+    steps: 0,
+    calories_burned: 0,
+    cardio_minutes: 0,
+    strength_minutes: 0,
+  },
+  today_diet: { calorie: 0, protein: 0, carb: 0, fat: 0 },
+  today_diet_logs: [],
+  nutrition_goals: {
+    calorieGoal: 2200,
+    proteinGoal: 140,
+    carbGoal: 250,
+    fatGoal: 70,
+  },
+  nutrition_gaps: {
+    calorie: 2200,
+    protein: 140,
+    carb: 250,
+    fat: 70,
+  },
+  current_hour: new Date().getHours(),
+});
+
+// ============ 首页专用 Hook ============
+
+const HOME_CACHE_KEY = 'moveat_ai_home_default';
+
+export const useHomeAiAnalysis = () => {
+  const { structuredJson, refresh: refreshHomeData } = useHomeData();
+
+  const [aiData, setAiData] = useState(() => readCache(HOME_CACHE_KEY) || DEFAULT_RESULT);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const hasFetchedRef = useRef(false);
-  const requestIdRef = useRef(0);
-  const abortControllerRef = useRef(null);
+  const fetchedRef = useRef(false);
+  const abortRef = useRef(null);
 
+  // 自动加载（有缓存不请求）
   useEffect(() => {
-    const today = getLocalDateStr();
-    const cachedDate = localStorage.getItem(CACHE_DATE_KEY);
-    const cached = localStorage.getItem(CACHE_KEY);
-
-    // 如果还没有结构化数据，只尝试从缓存恢复，不重置
-    if (!structuredJson?.user_profile && !localStorage.getItem('moveat_guest_id')) {
-      // 如果当前没有数据但有缓存，尝试恢复缓存
-      const alreadyHasData = aiData?.recommend_list && aiData.recommend_list.length > 0;
-      if (!alreadyHasData && cached && cachedDate === today) {
-        try {
-          const parsed = JSON.parse(cached);
-          setAiData(parsed);
-        } catch {
-          localStorage.removeItem(CACHE_KEY);
-          localStorage.removeItem(CACHE_DATE_KEY);
-        }
-      }
+    const cached = readCache(HOME_CACHE_KEY);
+    if (cached?.recommend_list?.length > 0) {
+      setAiData(cached);
+      fetchedRef.current = true;
       return;
     }
+    if (fetchedRef.current) return;
+    fetchedRef.current = true;
 
-    // 检查当前 aiData 是否已经有推荐列表（避免重复 setState 导致闪烁）
-    const alreadyHasData = aiData?.recommend_list && aiData.recommend_list.length > 0;
+    const controller = new AbortController();
+    abortRef.current = controller;
 
-    // 只有当前没有数据时才设置缓存
-    if (!alreadyHasData && cached && cachedDate === today) {
-      try {
-        const parsed = JSON.parse(cached);
-        setAiData(parsed);
-        hasFetchedRef.current = true;
-      } catch {
-        localStorage.removeItem(CACHE_KEY);
-        localStorage.removeItem(CACHE_DATE_KEY);
-      }
-    }
-
-    // 如果全局正在刷新，同步 loading 状态
-    if (globalRefreshing) {
+    const doFetch = async () => {
       setLoading(true);
-    }
-
-    if (hasFetchedRef.current) return;
-    hasFetchedRef.current = true;
-
-    // 后台静默获取，不设置 loading，不阻塞 UI
-    const fetchData = async () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-      const controller = new AbortController();
-      abortControllerRef.current = controller;
-
       try {
-        const result = await analyzeUserData(structuredJson, null, controller.signal);
+        const today = getToday();
+        const context = structuredJson || buildDefaultContext(today);
+        const result = await analyzeUserData(context, null, controller.signal);
         if (controller.signal.aborted) return;
         const merged = { ...DEFAULT_RESULT, ...result };
-        if (!Array.isArray(merged.recommend_list)) {
-          merged.recommend_list = [];
-        }
+        if (!Array.isArray(merged.recommend_list)) merged.recommend_list = [];
         setAiData(merged);
-        localStorage.setItem(CACHE_KEY, JSON.stringify(merged));
-        localStorage.setItem(CACHE_DATE_KEY, today);
+        writeCache(HOME_CACHE_KEY, merged);
       } catch (err) {
         if (err.name === 'AbortError') return;
-        console.error('AI分析失败:', err);
+        console.error('首页AI分析失败:', err);
         setError(err.message);
+      } finally {
+        setLoading(false);
       }
     };
 
-    fetchData();
+    doFetch();
 
-    return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-    };
+    return () => controller.abort();
   }, [structuredJson]);
 
-  const refreshAnalysis = useCallback(async (mode = null) => {
-    const currentId = ++requestIdRef.current;
-
-    // 取消之前的请求
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
+  // 手动刷新
+  const refreshAnalysis = useCallback(async () => {
+    if (abortRef.current) abortRef.current.abort();
     const controller = new AbortController();
-    abortControllerRef.current = controller;
+    abortRef.current = controller;
 
-    // 设置全局刷新状态
-    globalRefreshing = true;
     setLoading(true);
     setError(null);
-
     try {
       const latest = await refreshHomeData();
-      const context = { ...(latest?.structuredJson || structuredJson) };
+      const context = { ...(latest?.structuredJson || structuredJson || buildDefaultContext(getToday())) };
       if (!context.nutrition_gaps && context.today_diet && context.nutrition_goals) {
         const g = context.nutrition_goals;
         const d = context.today_diet;
@@ -146,76 +148,179 @@ export const useAiAnalysis = () => {
           fat: (g.fatGoal || 0) - (d.fat || 0),
         };
       }
-
-      if (!context?.user_profile && !localStorage.getItem('moveat_guest_id')) {
-        throw new Error('用户档案数据不完整');
-      }
-
-      const today = getLocalDateStr();
-      localStorage.removeItem(CACHE_KEY);
-      localStorage.removeItem(CACHE_DATE_KEY);
-
-      const result = await analyzeUserData(context, mode, controller.signal);
+      const result = await analyzeUserData(context, null, controller.signal);
       if (controller.signal.aborted) return;
-
       const merged = { ...DEFAULT_RESULT, ...result };
-      if (!Array.isArray(merged.recommend_list)) {
-        merged.recommend_list = [];
-      }
-
-      if (currentId !== requestIdRef.current) return;
-
+      if (!Array.isArray(merged.recommend_list)) merged.recommend_list = [];
       setAiData(merged);
-      localStorage.setItem(CACHE_KEY, JSON.stringify(merged));
-      localStorage.setItem(CACHE_DATE_KEY, today);
-
-      const guestId = localStorage.getItem('moveat_guest_id');
-      if (guestId) {
-        return merged;
-      }
-
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data: existing } = await supabase
-          .from('recommendation_logs')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('date', today)
-          .maybeSingle();
-
-        const payload = {
-          user_id: user.id,
-          date: today,
-          summary: merged.daily_summary || '',
-          nutrition_focus: merged.nutrition_suggest || '',
-          recommend_food: JSON.stringify(merged.recommend_list || []),
-          recommend_reason: merged.ai_tip || '',
-          meal_type: merged.recommend_list?.[0]?.food_type || '',
-        };
-
-        if (existing) {
-          const { error: updateError } = await supabase.from('recommendation_logs').update(payload).eq('id', existing.id);
-          if (updateError) console.error('更新推荐记录失败:', updateError);
-        } else {
-          const { error: insertError } = await supabase.from('recommendation_logs').insert(payload);
-          if (insertError) console.error('插入推荐记录失败:', insertError);
-        }
-      }
-
+      writeCache(HOME_CACHE_KEY, merged);
       return merged;
     } catch (err) {
       if (err.name === 'AbortError') return;
-      if (currentId !== requestIdRef.current) return;
-      console.error('AI分析刷新失败:', err);
+      console.error('首页AI刷新失败:', err);
       setError(err.message);
       throw err;
     } finally {
-      if (currentId === requestIdRef.current && !abortControllerRef.current?.signal.aborted) {
-        globalRefreshing = false;
-        setLoading(false);
-      }
+      setLoading(false);
     }
   }, [structuredJson, refreshHomeData]);
 
   return { aiData, loading, error, refreshAnalysis };
+};
+
+// ============ 外卖推荐页专用 Hook ============
+
+const RECOMMEND_MODES = ['default', '低卡模式', '高蛋白模式'];
+const getRecommendCacheKey = (mode) => `moveat_ai_recommend_${mode}`;
+
+export const useRecommendAiAnalysis = () => {
+  const { structuredJson, refresh: refreshHomeData } = useHomeData();
+
+  // 各模式独立数据
+  const [dataMap, setDataMap] = useState(() => {
+    const map = {};
+    RECOMMEND_MODES.forEach((m) => {
+      map[m] = readCache(getRecommendCacheKey(m)) || DEFAULT_RESULT;
+    });
+    return map;
+  });
+
+  // 各模式独立 loading
+  const [loadingMap, setLoadingMap] = useState(() => {
+    const map = {};
+    RECOMMEND_MODES.forEach((m) => (map[m] = false));
+    return map;
+  });
+
+  const [error, setError] = useState(null);
+  const [activeMode, setActiveMode] = useState('default');
+
+  const fetchedRef = useRef({});
+  const abortRef = useRef(null);
+
+  // 当前模式的数据和 loading
+  const aiData = dataMap[activeMode] || DEFAULT_RESULT;
+  const loading = loadingMap[activeMode] || false;
+
+  // 切换模式（只切换，不自动请求）
+  const switchMode = useCallback((mode) => {
+    setActiveMode(mode);
+  }, []);
+
+  // 自动加载当前模式（有缓存不请求）
+  useEffect(() => {
+    const cached = readCache(getRecommendCacheKey(activeMode));
+    if (cached?.recommend_list?.length > 0) {
+      setDataMap((prev) => ({ ...prev, [activeMode]: cached }));
+      fetchedRef.current[activeMode] = true;
+      return;
+    }
+    if (fetchedRef.current[activeMode]) return;
+    fetchedRef.current[activeMode] = true;
+
+    if (abortRef.current) abortRef.current.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    const doFetch = async () => {
+      setLoadingMap((prev) => ({ ...prev, [activeMode]: true }));
+      try {
+        const today = getToday();
+        const context = structuredJson || buildDefaultContext(today);
+        const modeParam = activeMode === 'default' ? null : activeMode;
+        const result = await analyzeUserData(context, modeParam, controller.signal);
+        if (controller.signal.aborted) return;
+        const merged = { ...DEFAULT_RESULT, ...result };
+        if (!Array.isArray(merged.recommend_list)) merged.recommend_list = [];
+        setDataMap((prev) => ({ ...prev, [activeMode]: merged }));
+        writeCache(getRecommendCacheKey(activeMode), merged);
+      } catch (err) {
+        if (err.name === 'AbortError') return;
+        console.error('推荐页AI分析失败:', err);
+        setError(err.message);
+      } finally {
+        setLoadingMap((prev) => ({ ...prev, [activeMode]: false }));
+      }
+    };
+
+    doFetch();
+
+    return () => controller.abort();
+  }, [activeMode, structuredJson]);
+
+  // 手动刷新指定模式（默认当前模式）
+  const refreshAnalysis = useCallback(
+    async (mode = null) => {
+      const targetMode = mode || activeMode;
+      if (abortRef.current) abortRef.current.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      setLoadingMap((prev) => ({ ...prev, [targetMode]: true }));
+      setError(null);
+
+      try {
+        const latest = await refreshHomeData();
+        const context = { ...(latest?.structuredJson || structuredJson || buildDefaultContext(getToday())) };
+        if (!context.nutrition_gaps && context.today_diet && context.nutrition_goals) {
+          const g = context.nutrition_goals;
+          const d = context.today_diet;
+          context.nutrition_gaps = {
+            calorie: (g.calorieGoal || 0) - (d.calorie || 0),
+            protein: (g.proteinGoal || 0) - (d.protein || 0),
+            carb: (g.carbGoal || 0) - (d.carb || 0),
+            fat: (g.fatGoal || 0) - (d.fat || 0),
+          };
+        }
+        const modeParam = targetMode === 'default' ? null : targetMode;
+        const result = await analyzeUserData(context, modeParam, controller.signal);
+        if (controller.signal.aborted) return;
+        const merged = { ...DEFAULT_RESULT, ...result };
+        if (!Array.isArray(merged.recommend_list)) merged.recommend_list = [];
+        setDataMap((prev) => ({ ...prev, [targetMode]: merged }));
+        writeCache(getRecommendCacheKey(targetMode), merged);
+
+        // 保存到数据库
+        const today = getToday();
+        const guestId = localStorage.getItem('moveat_guest_id');
+        if (!guestId) {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            const { data: existing } = await supabase
+              .from('recommendation_logs')
+              .select('id')
+              .eq('user_id', user.id)
+              .eq('date', today)
+              .maybeSingle();
+            const payload = {
+              user_id: user.id,
+              date: today,
+              summary: merged.daily_summary || '',
+              nutrition_focus: merged.nutrition_suggest || '',
+              recommend_food: JSON.stringify(merged.recommend_list || []),
+              recommend_reason: merged.ai_tip || '',
+              meal_type: merged.recommend_list?.[0]?.food_type || '',
+            };
+            if (existing) {
+              await supabase.from('recommendation_logs').update(payload).eq('id', existing.id);
+            } else {
+              await supabase.from('recommendation_logs').insert(payload);
+            }
+          }
+        }
+
+        return merged;
+      } catch (err) {
+        if (err.name === 'AbortError') return;
+        console.error('推荐页AI刷新失败:', err);
+        setError(err.message);
+        throw err;
+      } finally {
+        setLoadingMap((prev) => ({ ...prev, [targetMode]: false }));
+      }
+    },
+    [activeMode, structuredJson, refreshHomeData]
+  );
+
+  return { aiData, loading, error, refreshAnalysis, switchMode, activeMode };
 };
