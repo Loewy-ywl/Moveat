@@ -119,7 +119,8 @@ ${JSON.stringify(structuredJson, null, 2)}${modePrompt}
   3. 忌口 forbidden_food：严格排除包含忌口食材的菜品
   4. 当前时间 current_hour：结合早/午/晚餐场景推荐合适的餐品
 - 不要只推荐健身餐或轻食，应在营养合理的前提下体现用户的饮食偏好多样性
-- food_name 使用通用、高匹配度的餐食关键词，不要生成具体商家店名，确保可直接用于美团外卖搜索
+- food_name 必须是完整的菜品名称（如"番茄炖牛腩"、"麻婆豆腐"、"黑椒鸡胸肉沙拉"），禁止返回单独的食材名称（如"豆腐"、"土豆"、"鸡蛋"、"牛肉"等）。应使用通用、高匹配度的餐食关键词，不要生成具体商家店名，确保可直接用于美团外卖搜索
+- food_name_en 必须是对应菜品的标准英文名称，用于 Unsplash 图片搜索。要求：使用菜品真实英文名称（如 "Tomato Braised Beef Brisket"、"Mapo Tofu"、"Kung Pao Chicken"），不要直译，优先使用国际通用的英文菜名
 - recommend_list 的 reason 必须综合以下维度生成：基于 nutrition_gaps 和 today_diet 的真实数据说明如何弥补缺口；说明如何符合用户的饮食偏好；结合用户目标（减脂/增肌/保持）给出针对性建议。禁止杜撰任何数值
 - 当存在筛选模式时（非AI排序），recommend_list 中的所有菜品必须100%符合该模式的营养门槛，不允许出现任何不符合条件的菜品
 - 高蛋白模式下：recommend_list 中所有菜品的蛋白质必须≥30g，禁止出现低蛋白菜品。每条推荐理由必须包含「这份餐食蛋白质XXg，符合高蛋白模式需求，可补充你的蛋白质缺口」，其中XXg为该菜品实际含有的蛋白质克数
@@ -135,7 +136,8 @@ ${JSON.stringify(structuredJson, null, 2)}${modePrompt}
   "ai_tip": "结合当前时间与已摄入餐食的口语化饮食建议文案",
   "recommend_list": [
     {
-      "food_name": "通用餐食关键词，如高蛋白鸡胸肉健身餐",
+      "food_name": "完整菜品名称，如番茄炖牛腩、麻婆豆腐、黑椒鸡胸肉沙拉，禁止单独食材如豆腐、土豆",
+      "food_name_en": "该菜品的英文名称，用于图片搜索，如 Tomato Braised Beef Brisket、Mapo Tofu、Black Pepper Chicken Breast Salad",
       "food_type": "餐品类型",
       "heat": "预估热量（单位：kcal）",
       "nutrition_ratio": "蛋白/碳水/脂肪配比",

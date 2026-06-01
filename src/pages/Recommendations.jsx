@@ -1,44 +1,92 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Flame, ThumbsUp, ExternalLink, Loader2, RefreshCw, ImageOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useRecommendAiAnalysis } from '@/hooks/useAiAnalysis';
+import { searchFoodImage } from '@/lib/unsplash';
 
 const filters = ['AI排序', '低卡模式', '高蛋白模式'];
 
-const FoodImage = ({ foodName }) => {
+const FoodImage = ({ food }) => {
+  const [imageUrl, setImageUrl] = useState('');
   const [error, setError] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  if (error) {
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(false);
+
+    const fetchImage = async () => {
+      const query = food?.food_name_en || food?.food_name;
+      try {
+        const url = await searchFoodImage(query);
+        if (!cancelled) {
+          if (url) {
+            setImageUrl(url);
+          } else {
+            setError(true);
+          }
+          setLoading(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setError(true);
+          setLoading(false);
+        }
+      }
+    };
+
+    fetchImage();
+    return () => { cancelled = true; };
+  }, [food?.food_name_en, food?.food_name]);
+
+  if (loading) {
     return (
-      <div className="w-full h-full flex items-center justify-center bg-muted text-muted-foreground">
-        <div className="text-center">
-          <ImageOff size={40} className="mx-auto mb-2 opacity-50" />
-          <span className="text-xs">{foodName}</span>
+      <div className="relative w-full h-full flex items-center justify-center bg-muted text-muted-foreground">
+        <Loader2 size={24} className="animate-spin opacity-50" />
+        <div className="absolute top-0 left-0 right-0 bg-black/40 backdrop-blur-[2px] py-1.5">
+          <p className="text-center text-[10px] text-white/80 tracking-wide">
+            图片仅供参考，一切以下单实物为准
+          </p>
         </div>
       </div>
     );
   }
 
-  // 使用 Unsplash Source 作为图片源
-  const getImageUrl = (keyword) => {
-    const cleanKeyword = keyword
-      .replace(/健身餐|轻食|简餐|套餐/g, '')
-      .replace(/高蛋白|低卡|清淡|低脂/g, '')
-      .trim();
-    return `https://source.unsplash.com/400x200/?food,${encodeURIComponent(cleanKeyword || 'healthy food')}`;
-  };
+  if (error || !imageUrl) {
+    return (
+      <div className="relative w-full h-full flex items-center justify-center bg-muted text-muted-foreground">
+        <div className="text-center">
+          <ImageOff size={40} className="mx-auto mb-2 opacity-50" />
+          <span className="text-xs">{food?.food_name}</span>
+        </div>
+        <div className="absolute top-0 left-0 right-0 bg-black/40 backdrop-blur-[2px] py-1.5">
+          <p className="text-center text-[10px] text-white/80 tracking-wide">
+            图片仅供参考，一切以下单实物为准
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <img
-      src={getImageUrl(foodName)}
-      alt={foodName}
-      className="w-full h-full object-cover"
-      onError={() => setError(true)}
-      loading="lazy"
-    />
+    <div className="relative w-full h-full">
+      <img
+        src={imageUrl}
+        alt={food?.food_name}
+        className="w-full h-full object-cover"
+        onError={() => setError(true)}
+        loading="lazy"
+      />
+      <div className="absolute top-0 left-0 right-0 bg-black/40 backdrop-blur-[2px] py-1.5">
+        <p className="text-center text-[10px] text-white/80 tracking-wide">
+          图片仅供参考，一切以下单实物为准
+        </p>
+      </div>
+    </div>
   );
 };
 
@@ -112,7 +160,7 @@ const Recommendations = () => {
             return (
               <Card key={`${food.food_name}-${i}`} className="overflow-hidden">
                 <div className="h-32 bg-muted relative">
-                  <FoodImage foodName={food.food_name} />
+                  <FoodImage food={food} />
                   
                   <Badge className="absolute top-2 right-2 bg-emerald-500">
                     <ThumbsUp size={12} className="mr-1" />{food.food_type}

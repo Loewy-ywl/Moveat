@@ -216,13 +216,12 @@ export const useRecommendAiAnalysis = () => {
       return;
     }
     if (fetchedRef.current[activeMode]) return;
-    fetchedRef.current[activeMode] = true;
 
     if (abortRef.current) abortRef.current.abort();
     const controller = new AbortController();
     abortRef.current = controller;
 
-    const doFetch = async () => {
+    const doFetch = async (retryCount = 0) => {
       setLoadingMap((prev) => ({ ...prev, [activeMode]: true }));
       try {
         const today = getToday();
@@ -234,12 +233,27 @@ export const useRecommendAiAnalysis = () => {
         if (!Array.isArray(merged.recommend_list)) merged.recommend_list = [];
         setDataMap((prev) => ({ ...prev, [activeMode]: merged }));
         writeCache(getRecommendCacheKey(activeMode), merged);
+        fetchedRef.current[activeMode] = true;
       } catch (err) {
         if (err.name === 'AbortError') return;
         console.error('推荐页AI分析失败:', err);
         setError(err.message);
+        // 自动重试，最多3次
+        if (retryCount < 3) {
+          setTimeout(() => {
+            if (!controller.signal.aborted) {
+              doFetch(retryCount + 1);
+            }
+          }, 2000 * (retryCount + 1));
+          return;
+        }
+        // 重试用尽，标记为已尝试（允许后续手动刷新）
+        fetchedRef.current[activeMode] = true;
       } finally {
-        setLoadingMap((prev) => ({ ...prev, [activeMode]: false }));
+        // 只有在不重试时才关闭 loading
+        if (fetchedRef.current[activeMode]) {
+          setLoadingMap((prev) => ({ ...prev, [activeMode]: false }));
+        }
       }
     };
 
