@@ -8,6 +8,7 @@ import { useHomeAiAnalysis } from '@/hooks/useAiAnalysis';
 import HomeStats from '@/components/home/HomeStats';
 import FoodRecommendCard from '@/components/home/FoodRecommendCard';
 import { getGoalInfo, getGreeting, getFallbackAdvice } from '@/lib/home-helpers';
+import { getLocalDateStr } from '@/lib/date';
 import { toast } from 'sonner';
 
 const Home = () => {
@@ -25,8 +26,14 @@ const Home = () => {
   const navigate = useNavigate();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showFoodCard, setShowFoodCard] = useState(() => {
-    // 从 localStorage 读取是否已生成过推荐
-    return localStorage.getItem('moveat_show_food_card') === 'true';
+    try {
+      const raw = localStorage.getItem('moveat_show_food_card');
+      if (!raw) return false;
+      const parsed = JSON.parse(raw);
+      return parsed?.__date === getLocalDateStr() && parsed?.show === true;
+    } catch {
+      return false;
+    }
   });
   const [foodRefreshing, setFoodRefreshing] = useState(false);
   const refreshRef = useRef(refreshAnalysis);
@@ -46,6 +53,14 @@ const Home = () => {
   const carbPercent = carbGoal > 0 ? Math.min(100, Math.round((dietSummary.carb / carbGoal) * 100)) : 0;
   const fatPercent = fatGoal > 0 ? Math.min(100, Math.round((dietSummary.fat / fatGoal) * 100)) : 0;
 
+
+  // 当 AI 数据加载完成且有推荐数据时，自动显示卡片（与 localStorage 同步）
+  useEffect(() => {
+    if (aiData?.recommend_list?.length > 0 && !showFoodCard) {
+      setShowFoodCard(true);
+      localStorage.setItem('moveat_show_food_card', JSON.stringify({ __date: getLocalDateStr(), show: true }));
+    }
+  }, [aiData?.recommend_list?.length, showFoodCard]);
 
   useEffect(() => {
     const checkAutoRefresh = async () => {
@@ -88,9 +103,9 @@ const Home = () => {
   };
 
   const handleGenerateFood = async () => {
-    if (aiLoading || isRefreshing) return;
+    if (isRefreshing) return;
     setShowFoodCard(true);
-    localStorage.setItem('moveat_show_food_card', 'true');
+    localStorage.setItem('moveat_show_food_card', JSON.stringify({ __date: getLocalDateStr(), show: true }));
     
     // 如果已经有推荐数据，直接使用缓存，不再请求
     if (aiData?.recommend_list?.length > 0) {
@@ -219,10 +234,9 @@ const Home = () => {
           {!showFoodCard ? (
             <Button
               onClick={handleGenerateFood}
-              disabled={aiLoading}
               className="w-full bg-[#FFC300] text-gray-900 hover:bg-[#e6b000]"
             >
-              {aiLoading ? 'AI分析中...' : '一键生成今日专属外卖'}
+              一键生成今日专属外卖
             </Button>
           ) : aiLoading && !aiData?.recommend_list?.[0] ? (
             <div className="flex flex-col items-center justify-center py-10 gap-3">
