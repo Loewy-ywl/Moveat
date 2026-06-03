@@ -52,6 +52,8 @@ const clearCachedProfile = () => {
 };
 
 const Profile = () => {
+  // isGuest 必须在最前面定义，因为后面的 useState 初始化会用到它
+  const isGuest = !!localStorage.getItem('moveat_guest_id');
   const { nickname: homeNickname, refresh: refreshHomeData } = useHomeData();
   // 初始化时先从缓存读取，避免闪烁
   const cacheRaw = typeof window !== 'undefined' ? localStorage.getItem(PROFILE_CACHE_KEY) : null;
@@ -78,7 +80,6 @@ const Profile = () => {
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [editForm, setEditForm] = useState({});
   const [saving, setSaving] = useState(false);
-  const isGuest = !!localStorage.getItem('moveat_guest_id');
   const { data: weeklyData, loading: weeklyLoading } = useWeeklyData();
 
   // 加载档案数据（有缓存则先显示缓存，后台静默刷新）
