@@ -41,9 +41,9 @@ const getCachedProfile = () => {
   }
 };
 
-// 写入缓存
-const setCachedProfile = (data) => {
-  localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ data, timestamp: Date.now() }));
+// 写入缓存（同时缓存 profile 和 userId）
+const setCachedProfile = (data, userId) => {
+  localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ data, userId, timestamp: Date.now() }));
 };
 
 // 清除缓存
@@ -54,10 +54,24 @@ const clearCachedProfile = () => {
 const Profile = () => {
   const { nickname: homeNickname, refresh: refreshHomeData } = useHomeData();
   // 初始化时先从缓存读取，避免闪烁
-  const cached = typeof window !== 'undefined' ? getCachedProfile() : null;
-  const [profile, setProfile] = useState(cached);
-  const [nickname, setNickname] = useState(homeNickname || (cached?.name) || 'Moveat 用户');
-  const [profileLoading, setProfileLoading] = useState(!cached);
+  const cacheRaw = typeof window !== 'undefined' ? localStorage.getItem(PROFILE_CACHE_KEY) : null;
+  let cachedData = null;
+  let cachedUserId = null;
+  if (cacheRaw) {
+    try {
+      const parsed = JSON.parse(cacheRaw);
+      if (Date.now() - parsed.timestamp < PROFILE_CACHE_TTL) {
+        cachedData = parsed.data;
+        cachedUserId = parsed.userId;
+      } else {
+        localStorage.removeItem(PROFILE_CACHE_KEY);
+      }
+    } catch { /* ignore */ }
+  }
+  const [profile, setProfile] = useState(cachedData);
+  const [userId, setUserId] = useState(cachedUserId || (isGuest ? localStorage.getItem('moveat_guest_id') : null));
+  const [nickname, setNickname] = useState(homeNickname || (cachedData?.name) || 'Moveat 用户');
+  const [profileLoading, setProfileLoading] = useState(!cachedData && !isGuest);
   const [showDialog, setShowDialog] = useState(false);
   const [isEditingNickname, setIsEditingNickname] = useState(false);
   const [editNickname, setEditNickname] = useState('');
@@ -93,11 +107,14 @@ const Profile = () => {
           return;
         }
 
+        // 设置真实 userId
+        if (!cancelled) setUserId(user.id);
+
         const { data: userData } = await supabase.from('users').select('*').eq('user_id', user.id).maybeSingle();
         if (!cancelled) {
           if (userData) {
             setProfile(userData);
-            setCachedProfile(userData); // 写入缓存
+            setCachedProfile(userData, user.id); // 写入缓存（含 userId）
           }
           setProfileLoading(false);
           if (userData?.name) setNickname(userData.name);
@@ -180,7 +197,7 @@ const Profile = () => {
           // 更新本地 profile 和缓存
           const updated = { ...(profile || {}), user_id: user.id, ...payload };
           setProfile(updated);
-          setCachedProfile(updated);
+          setCachedProfile(updated, user.id);
           // 清除 useHomeData 缓存，让其他页面获取最新数据
           clearHomeDataCache();
           await refreshHomeData();
@@ -258,7 +275,7 @@ const Profile = () => {
             autoFocus
           />
         )}
-        <p className="text-sm text-muted-foreground">{isGuest ? '游客模式' : 'ID: 88293011'}</p>
+        <p className="text-sm text-muted-foreground">{isGuest ? '游客模式' : (userId ? `ID: ${userId.slice(0, 8)}` : 'ID: --')}</p>
         {isGuest && <span className="mt-2 px-3 py-0.5 bg-amber-100 text-amber-700 text-xs rounded-full">游客模式</span>}
       </div>
 
