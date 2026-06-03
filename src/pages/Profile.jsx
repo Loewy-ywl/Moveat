@@ -21,11 +21,43 @@ const goalOptions = [
 const prefOptions = ['中餐', '轻食', '健身餐', '低碳', '高蛋白', '素食', '日式', '韩式', '西式', '地中海饮食', '无麸质'];
 const freqOptions = ['1-2次', '3-4次', '5次以上'];
 
+// 档案数据缓存 key
+const PROFILE_CACHE_KEY = 'moveat_profile_cache';
+const PROFILE_CACHE_TTL = 5 * 60 * 1000; // 5 分钟缓存
+
+// 从缓存读取档案（带过期检查）
+const getCachedProfile = () => {
+  try {
+    const raw = localStorage.getItem(PROFILE_CACHE_KEY);
+    if (!raw) return null;
+    const { data, timestamp } = JSON.parse(raw);
+    if (Date.now() - timestamp > PROFILE_CACHE_TTL) {
+      localStorage.removeItem(PROFILE_CACHE_KEY);
+      return null;
+    }
+    return data;
+  } catch {
+    return null;
+  }
+};
+
+// 写入缓存
+const setCachedProfile = (data) => {
+  localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ data, timestamp: Date.now() }));
+};
+
+// 清除缓存
+const clearCachedProfile = () => {
+  localStorage.removeItem(PROFILE_CACHE_KEY);
+};
+
 const Profile = () => {
   const { nickname: homeNickname, refresh: refreshHomeData } = useHomeData();
-  const [profile, setProfile] = useState(null);
-  const [nickname, setNickname] = useState(homeNickname || 'Moveat 用户');
-  const [profileLoading, setProfileLoading] = useState(true);
+  // 初始化时先从缓存读取，避免闪烁
+  const cached = typeof window !== 'undefined' ? getCachedProfile() : null;
+  const [profile, setProfile] = useState(cached);
+  const [nickname, setNickname] = useState(homeNickname || (cached?.name) || 'Moveat 用户');
+  const [profileLoading, setProfileLoading] = useState(!cached);
   const [showDialog, setShowDialog] = useState(false);
   const [isEditingNickname, setIsEditingNickname] = useState(false);
   const [editNickname, setEditNickname] = useState('');
@@ -35,12 +67,15 @@ const Profile = () => {
   const isGuest = !!localStorage.getItem('moveat_guest_id');
   const { data: weeklyData, loading: weeklyLoading } = useWeeklyData();
 
-  // 加载档案数据
+  // 加载档案数据（有缓存则先显示缓存，后台静默刷新）
   useEffect(() => {
     let cancelled = false;
 
     const loadProfile = async () => {
-      setProfileLoading(true);
+      // 如果已有缓存，不显示 loading，后台静默刷新
+      if (!cancelled && !profile) {
+        setProfileLoading(true);
+      }
 
       try {
         if (isGuest) {
@@ -60,7 +95,10 @@ const Profile = () => {
 
         const { data: userData } = await supabase.from('users').select('*').eq('user_id', user.id).maybeSingle();
         if (!cancelled) {
-          setProfile(userData || null);
+          if (userData) {
+            setProfile(userData);
+            setCachedProfile(userData); // 写入缓存
+          }
           setProfileLoading(false);
           if (userData?.name) setNickname(userData.name);
         }
@@ -139,8 +177,10 @@ const Profile = () => {
             ...payload,
           }, { onConflict: 'user_id' });
           if (error) throw error;
-          // 更新本地 profile
-          setProfile((prev) => ({ ...(prev || {}), user_id: user.id, ...payload }));
+          // 更新本地 profile 和缓存
+          const updated = { ...(profile || {}), user_id: user.id, ...payload };
+          setProfile(updated);
+          setCachedProfile(updated);
           // 清除 useHomeData 缓存，让其他页面获取最新数据
           clearHomeDataCache();
           await refreshHomeData();
