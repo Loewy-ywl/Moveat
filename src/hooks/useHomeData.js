@@ -89,7 +89,8 @@ export const useHomeData = () => {
 
   const loadData = useCallback(async (force = false) => {
     // 如果缓存有效且不是强制刷新，直接返回缓存
-    if (!force && globalCache && Date.now() - globalCacheTime < CACHE_TTL) {
+    // 注意：缓存中 profile 为 null 时认为缓存不完整，需要重新请求
+    if (!force && globalCache && Date.now() - globalCacheTime < CACHE_TTL && globalCache.profile) {
       return globalCache;
     }
 
