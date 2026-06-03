@@ -41,9 +41,9 @@ const getCachedProfile = () => {
   }
 };
 
-// 写入缓存（同时缓存 profile 和 userId）
-const setCachedProfile = (data, userId) => {
-  localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ data, userId, timestamp: Date.now() }));
+// 写入缓存（同时缓存 profile、userId 和 nickname）
+const setCachedProfile = (data, userId, name) => {
+  localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ data, userId, name, timestamp: Date.now() }));
 };
 
 // 清除缓存
@@ -59,20 +59,23 @@ const Profile = () => {
   const cacheRaw = typeof window !== 'undefined' ? localStorage.getItem(PROFILE_CACHE_KEY) : null;
   let cachedData = null;
   let cachedUserId = null;
+  let cachedName = null;
   if (cacheRaw) {
     try {
       const parsed = JSON.parse(cacheRaw);
       if (Date.now() - parsed.timestamp < PROFILE_CACHE_TTL) {
         cachedData = parsed.data;
         cachedUserId = parsed.userId;
+        cachedName = parsed.name; // 缓存的昵称
       } else {
         localStorage.removeItem(PROFILE_CACHE_KEY);
       }
     } catch { /* ignore */ }
   }
+  // nickname 优先级：缓存的 name > homeNickname > 默认值（避免从 useHomeData 获取默认值导致闪烁）
   const [profile, setProfile] = useState(cachedData);
   const [userId, setUserId] = useState(cachedUserId || (isGuest ? localStorage.getItem('moveat_guest_id') : null));
-  const [nickname, setNickname] = useState(homeNickname || (cachedData?.name) || 'Moveat 用户');
+  const [nickname, setNickname] = useState(cachedName || homeNickname || 'Moveat 用户');
   const [profileLoading, setProfileLoading] = useState(!cachedData && !isGuest);
   const [showDialog, setShowDialog] = useState(false);
   const [isEditingNickname, setIsEditingNickname] = useState(false);
@@ -115,7 +118,7 @@ const Profile = () => {
         if (!cancelled) {
           if (userData) {
             setProfile(userData);
-            setCachedProfile(userData, user.id); // 写入缓存（含 userId）
+            setCachedProfile(userData, user.id, userData.name); // 写入缓存（含 userId + name）
           }
           setProfileLoading(false);
           if (userData?.name) setNickname(userData.name);
@@ -198,7 +201,7 @@ const Profile = () => {
           // 更新本地 profile 和缓存
           const updated = { ...(profile || {}), user_id: user.id, ...payload };
           setProfile(updated);
-          setCachedProfile(updated, user.id);
+          setCachedProfile(updated, user.id, nickname); // 保存当前 nickname 到缓存
           // 清除 useHomeData 缓存，让其他页面获取最新数据
           clearHomeDataCache();
           await refreshHomeData();
