@@ -133,9 +133,14 @@ const Profile = () => {
       } else {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
-          await supabase.from('users').update(payload).eq('user_id', user.id);
+          // 使用 upsert：有则更新，无则插入
+          const { error } = await supabase.from('users').upsert({
+            user_id: user.id,
+            ...payload,
+          }, { onConflict: 'user_id' });
+          if (error) throw error;
           // 更新本地 profile
-          setProfile((prev) => ({ ...prev, ...payload }));
+          setProfile((prev) => ({ ...(prev || {}), user_id: user.id, ...payload }));
           // 清除 useHomeData 缓存，让其他页面获取最新数据
           clearHomeDataCache();
           await refreshHomeData();
