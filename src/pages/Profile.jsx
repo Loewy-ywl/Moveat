@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Activity, History, Pencil, Dumbbell, UtensilsCrossed, X, ChevronLeft, Save } from 'lucide-react';
+import { Activity, Pencil, Dumbbell, UtensilsCrossed, X, ChevronLeft, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import ProfileCard from '@/components/ProfileCard';
@@ -286,10 +286,9 @@ const Profile = () => {
       <ProfileCard profile={profile} onEdit={openProfileEdit} loading={profileLoading} />
 
       <div className="space-y-3 my-4">
-        <ProfileActionCard icon={Activity} colorClass="bg-blue-100" textClass="text-blue-600" title="运动数据同步" desc={isGuest ? '游客模式暂不可用' : 'Apple Health 已连接'} onClick={handleSyncMockData} />
+        <ProfileActionCard icon={Activity} colorClass="bg-blue-100" textClass="text-blue-600" title="运动数据同步" desc={isGuest ? '游客模式暂不可用' : '导入模拟移动设备数据'} onClick={handleSyncMockData} />
         <ProfileActionCard icon={Pencil} colorClass="bg-purple-100" textClass="text-purple-600" title="手动录入运动数据" desc="补充今日额外运动消耗" onClick={() => setShowDialog(true)} />
         <ProfileActionCard icon={UtensilsCrossed} colorClass="bg-emerald-100" textClass="text-emerald-600" title="饮食打卡" desc="记录你的每一餐" onClick={() => window.location.href = '#/diet-record'} />
-        <ProfileActionCard icon={History} colorClass="bg-orange-100" textClass="text-orange-600" title="历史外卖推荐" desc="本周已推荐 12 单" onClick={() => {}} />
       </div>
 
       <HealthDashboard data={weeklyData} loading={weeklyLoading} />
