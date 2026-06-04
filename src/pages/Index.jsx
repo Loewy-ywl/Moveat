@@ -1,19 +1,12 @@
 import { useNavigate } from 'react-router-dom';
-import { Activity, MessageCircle, ChevronRight } from 'lucide-react';
+import { Activity, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const Index = () => {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-500 to-teal-700 text-white flex flex-col relative">
-      <button
-        onClick={() => navigate('/chat')}
-        className="absolute top-6 right-6 text-white/90 hover:text-white text-sm flex items-center bg-white/10 px-3 py-1.5 rounded-full backdrop-blur-sm transition-colors z-10"
-      >
-        <MessageCircle size={16} className="mr-1" /> AI助手
-      </button>
-
+    <div className="min-h-screen bg-gradient-to-br from-emerald-500 to-teal-700 text-white flex flex-col">
       <div className="flex-1 flex flex-col items-center justify-center px-6">
         <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center mb-6">
           <Activity size={32} />
@@ -23,16 +16,25 @@ const Index = () => {
 
         <div className="w-full space-y-3 mb-8">
           <div className="bg-white/10 rounded-xl p-4 flex items-center gap-3">
-            <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-sm">🍎</div>
-            <span className="text-sm">Apple Health</span>
+            <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-sm">🎯</div>
+            <div className="flex-1">
+              <span className="text-sm font-medium">个性化推荐</span>
+              <p className="text-xs text-white/70">基于身高体重年龄，算出你每日所需</p>
+            </div>
+          </div>
+          <div className="bg-white/10 rounded-xl p-4 flex items-center gap-3">
+            <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-sm">🍱</div>
+            <div className="flex-1">
+              <span className="text-sm font-medium">外卖智能选</span>
+              <p className="text-xs text-white/70">分析营养成分，推荐最适合的餐品</p>
+            </div>
           </div>
           <div className="bg-white/10 rounded-xl p-4 flex items-center gap-3">
             <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-sm">💬</div>
-            <span className="text-sm">微信运动</span>
-          </div>
-          <div className="bg-white/10 rounded-xl p-4 flex items-center gap-3">
-            <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-sm">⌚</div>
-            <span className="text-sm">小米/华为手环接入</span>
+            <div className="flex-1">
+              <span className="text-sm font-medium">AI 随身问</span>
+              <p className="text-xs text-white/70">吃什么、吃多少，一问就知道</p>
+            </div>
           </div>
         </div>
 
