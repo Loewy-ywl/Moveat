@@ -7,7 +7,8 @@ import { LogOut, Moon, UserCircle, Link2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
 const SettingsCard = () => {
-  const [isDark, setIsDark] = useState(false);
+  // 初始化时从 DOM 读取当前深色模式状态，避免切换页面后重置
+  const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'));
   const navigate = useNavigate();
 
   useEffect(() => {
