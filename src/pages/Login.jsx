@@ -52,7 +52,7 @@ const Login = () => {
         {step === 'form' ? '登录 Moveat' : '验证邮箱'}
       </h1>
       <p className="text-center text-sm text-muted-foreground mb-6">
-        {step === 'form' ? '欢迎回来，继续你的健康之旅' : '请输入邮箱收到的 6 位验证码'}
+        {step === 'form' ? '开启你的健康饮食之旅' : '请输入邮箱收到的 6 位验证码'}
       </p>
 
       {step === 'form' ? (
