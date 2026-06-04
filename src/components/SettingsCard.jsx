@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
-import { LogOut, Moon, UserCircle, Link2 } from 'lucide-react';
+import { LogOut, Moon } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
 const SettingsCard = () => {
@@ -49,19 +49,6 @@ const SettingsCard = () => {
             <span>深色模式</span>
           </div>
           <Switch checked={isDark} onCheckedChange={setIsDark} />
-        </div>
-        <div className="flex items-center justify-between cursor-pointer">
-          <div className="flex items-center gap-2 text-sm">
-            <UserCircle size={16} className="text-muted-foreground" />
-            <span>账号管理</span>
-          </div>
-        </div>
-        <div className="flex items-center justify-between cursor-pointer">
-          <div className="flex items-center gap-2 text-sm">
-            <Link2 size={16} className="text-[#FFC300]" />
-            <span>美团账号授权管理</span>
-          </div>
-          <span className="text-xs text-muted-foreground">已授权</span>
         </div>
         <Button
           variant="outline"
