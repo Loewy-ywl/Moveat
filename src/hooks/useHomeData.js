@@ -62,26 +62,67 @@ const buildDietLogsPayload = (logs) =>
     fat: log.fat,
   }));
 
-// 全局缓存，避免每次组件挂载都重新请求
+// 全局内存缓存，避免同一会话内重复请求
 let globalCache = null;
 let globalCacheTime = 0;
-const CACHE_TTL = 30 * 1000; // 30秒缓存
+const MEMORY_CACHE_TTL = 30 * 1000; // 内存缓存 30 秒
+
+// localStorage 持久化缓存 key（跨页面切换不丢失）
+const HOME_ACTIVITY_CACHE_KEY = 'moveat_home_activity_cache';
+const HOME_ACTIVITY_CACHE_TTL = 5 * 60 * 1000; // 持久化缓存 5 分钟
+
+// 从 localStorage 读取活动数据缓存
+const getCachedActivity = () => {
+  try {
+    const raw = localStorage.getItem(HOME_ACTIVITY_CACHE_KEY);
+    if (!raw) return null;
+    const { data, timestamp, date } = JSON.parse(raw);
+    const today = getLocalDateStr();
+    // 过期或非当天数据则无效
+    if (Date.now() - timestamp > HOME_ACTIVITY_CACHE_TTL || date !== today) {
+      localStorage.removeItem(HOME_ACTIVITY_CACHE_KEY);
+      return null;
+    }
+    return data;
+  } catch {
+    return null;
+  }
+};
+
+// 写入活动数据到 localStorage 缓存
+const setCachedActivity = (activity) => {
+  try {
+    localStorage.setItem(HOME_ACTIVITY_CACHE_KEY, JSON.stringify({
+      data: activity,
+      timestamp: Date.now(),
+      date: getLocalDateStr(),
+    }));
+  } catch {/* ignore */}
+};
+
+// 清除活动数据缓存
+const clearCachedActivity = () => {
+  localStorage.removeItem(HOME_ACTIVITY_CACHE_KEY);
+};
 
 // 暴露清除缓存的方法，供外部调用
 export const clearHomeDataCache = () => {
   globalCache = null;
   globalCacheTime = 0;
+  clearCachedActivity();
 };
 
 export const useHomeData = () => {
-  const [nickname, setNickname] = useState(globalCache?.nickname || 'Moveat 用户');
-  const [steps, setSteps] = useState(globalCache?.steps || 0);
-  const [calories, setCalories] = useState(globalCache?.calories || 0);
-  const [cardioMinutes, setCardioMinutes] = useState(globalCache?.cardioMinutes || 0);
-  const [strengthMinutes, setStrengthMinutes] = useState(globalCache?.strengthMinutes || 0);
+  // 优先从 localStorage 持久化缓存读取（解决切换页面后归零的问题）
+  const lsCache = getCachedActivity();
+  const [nickname, setNickname] = useState(lsCache?.nickname || globalCache?.nickname || 'Moveat 用户');
+  const [steps, setSteps] = useState(lsCache?.steps ?? globalCache?.steps ?? 0);
+  const [calories, setCalories] = useState(lsCache?.calories ?? globalCache?.calories ?? 0);
+  const [cardioMinutes, setCardioMinutes] = useState(lsCache?.cardioMinutes ?? globalCache?.cardioMinutes ?? 0);
+  const [strengthMinutes, setStrengthMinutes] = useState(lsCache?.strengthMinutes ?? globalCache?.strengthMinutes ?? 0);
   const [profile, setProfile] = useState(globalCache?.profile || null);
-  const [activityLog, setActivityLog] = useState(globalCache?.activityLog || null);
-  const [initialized, setInitialized] = useState(!!globalCache);
+  const [activityLog, setActivityLog] = useState(lsCache?.activityLog || globalCache?.activityLog || null);
+  const [initialized, setInitialized] = useState(!!(lsCache || globalCache));
   const { dietLogs, todaySummary, refresh: refreshDiet } = useDietLogs();
 
   const nutritionGoals = useMemo(() => calculateNutritionGoals(profile), [profile]);
@@ -90,8 +131,17 @@ export const useHomeData = () => {
   const loadData = useCallback(async (force = false) => {
     // 如果缓存有效且不是强制刷新，直接返回缓存
     // 注意：缓存中 profile 为 null 时认为缓存不完整，需要重新请求
-    if (!force && globalCache && Date.now() - globalCacheTime < CACHE_TTL && globalCache.profile) {
+    // 内存缓存有效且完整时直接返回
+    if (!force && globalCache && Date.now() - globalCacheTime < MEMORY_CACHE_TTL && globalCache.profile) {
       return globalCache;
+    }
+    // 如果有 localStorage 缓存且不是强制刷新，直接用缓存数据返回（避免闪烁）
+    if (!force && lsCache && !globalCache?.profile) {
+      return {
+        profile: lsCache.profile,
+        activityLog: lsCache.activityLog,
+        structuredJson: lsCache.structuredJson,
+      };
     }
 
     const today = getLocalDateStr();
@@ -136,6 +186,17 @@ export const useHomeData = () => {
       };
       globalCache = result;
       globalCacheTime = Date.now();
+      // 写入 localStorage 持久化缓存（切换页面后不丢失）
+      setCachedActivity({
+        nickname: localStorage.getItem('moveat_guest_name') || '游客用户',
+        steps: guestActivity?.steps ?? 0,
+        calories: guestActivity?.calories_burned ?? 0,
+        cardioMinutes: guestActivity?.cardio_minutes ?? 0,
+        strengthMinutes: guestActivity?.strength_minutes ?? 0,
+        profile: guestProfile,
+        activityLog: guestActivity,
+        structuredJson: result.structuredJson,
+      });
       return result;
     }
 
@@ -202,6 +263,17 @@ export const useHomeData = () => {
       const result = { profile: userData, activityLog: act, structuredJson: structuredJsonResult };
       globalCache = result;
       globalCacheTime = Date.now();
+      // 写入 localStorage 持久化缓存（切换页面后不丢失）
+      setCachedActivity({
+        nickname: userData?.name || nickname,
+        steps: act?.steps ?? 0,
+        calories: act?.calories_burned ?? 0,
+        cardioMinutes: act?.cardio_minutes ?? 0,
+        strengthMinutes: act?.strength_minutes ?? 0,
+        profile: userData,
+        activityLog: act,
+        structuredJson: structuredJsonResult,
+      });
       return result;
     } catch (err) {
       console.error('加载首页数据出错:', err);
@@ -211,7 +283,7 @@ export const useHomeData = () => {
 
   useEffect(() => {
     // 如果有缓存，先标记为已初始化，然后后台刷新
-    if (globalCache && Date.now() - globalCacheTime < CACHE_TTL) {
+    if (globalCache && Date.now() - globalCacheTime < MEMORY_CACHE_TTL) {
       setInitialized(true);
       // 后台静默刷新，不阻塞 UI
       loadData(false);
